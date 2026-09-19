@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { executeRouting } from '../src/jobService.js';
 import { firstPeakIndex, volume } from '../src/muskingum/hydrograph.js';
-import { TRIANGULAR_INFLOW, SHORT_TRIANGLE } from './helpers.js';
+import { TRIANGULAR_INFLOW, SHORT_TRIANGLE, FLAT_TOP_INFLOW } from './helpers.js';
 
 test('三角入流：出流峰更矮，且峰现下标不早于入流峰', () => {
   const job = executeRouting({ inflow: TRIANGULAR_INFLOW, dt: 1, K: 2, X: 0.2 });
@@ -63,6 +63,18 @@ test('峰现下标：平台取最先达到最大值的下标', () => {
   assert.equal(firstPeakIndex([0, 5, 5, 5, 2]), 1);
   assert.equal(firstPeakIndex([1, 2, 9, 3]), 2);
   assert.equal(firstPeakIndex([4, 4]), 0);
+});
+
+test('入流峰顶走平：入流峰现下标取平台起点，峰现滞后按这个下标计算', () => {
+  const job = executeRouting({ inflow: FLAT_TOP_INFLOW, dt: 1, K: 2, X: 0.2 });
+  assert.equal(job.inflowPeakIndex, 3, '平台峰必须取最先达到最大值的下标 3，而非平台末尾 5');
+  assert.equal(job.outflowPeakIndex, 6, '本组参数下出流是尖峰，峰现下标 6');
+  assert.equal(job.peakLagSteps, 3, '滞后步数 = 出流峰 6 − 入流峰起点 3');
+});
+
+test('尖峰对照：唯一最大值的入流峰现下标不受影响', () => {
+  const sharp = executeRouting({ inflow: SHORT_TRIANGLE, dt: 1, K: 2, X: 0.2 });
+  assert.equal(sharp.inflowPeakIndex, 3);
 });
 
 test('洪量 = 流量 × 步长求和', () => {

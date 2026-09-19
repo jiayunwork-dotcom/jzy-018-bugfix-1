@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildApp } from '../src/app.js';
 import { DEMO_JOB_ID } from '../src/config.js';
-import { TRIANGULAR_INFLOW, SHORT_TRIANGLE } from './helpers.js';
+import { TRIANGULAR_INFLOW, SHORT_TRIANGLE, FLAT_TOP_INFLOW } from './helpers.js';
 
 let app;
 
@@ -186,6 +186,32 @@ test('内置三角入流示范作业：峰更矮更晚，洪量闭合', async ()
   assert.ok(Math.max(...demo.outflow) < Math.max(...demo.inflow), '出流峰更矮');
   assert.ok(demo.outflowPeakIndex > demo.inflowPeakIndex, '峰现更晚');
   assert.ok(Math.abs(demo.volumeDifference) <= demo.closureTolerance, '洪量闭合');
+});
+
+test('入流峰顶走平：峰现下标取平台起点，滞后步数按该下标计算（内联参数与点名河段档一致）', async () => {
+  const res = await postJob({ inflow: FLAT_TOP_INFLOW, dt: 1, K: 2, X: 0.2 });
+  assert.equal(res.statusCode, 201);
+  const job = res.json();
+  assert.equal(job.inflowPeakIndex, 3, '入流峰现应取平台起点 3，而非平台末尾 5');
+  assert.equal(job.outflowPeakIndex, 6);
+  assert.equal(job.peakLagSteps, 3, '滞后步数 = 6 − 3');
+
+  // 用作业编号取回整份结果，下标与提交时一致
+  const gotRes = await app.inject({ method: 'GET', url: `/jobs/${job.id}` });
+  assert.equal(gotRes.statusCode, 200);
+  const got = gotRes.json();
+  assert.equal(got.inflowPeakIndex, 3);
+  assert.equal(got.outflowPeakIndex, 6);
+  assert.equal(got.peakLagSteps, 3);
+  assert.deepEqual(got.inflow, FLAT_TOP_INFLOW, '过程线不得被改动');
+  assert.deepEqual(got.outflow, job.outflow, '过程线不得被改动');
+
+  // 点名河段档再走一遍，入流峰现同样取平台起点
+  await app.inject({ method: 'POST', url: '/reaches', payload: { name: '平台峰对照档', K: 2, X: 0.2 } });
+  const byReach = await postJob({ inflow: FLAT_TOP_INFLOW, dt: 1, reachName: '平台峰对照档' });
+  assert.equal(byReach.statusCode, 201);
+  assert.equal(byReach.json().inflowPeakIndex, 3);
+  assert.equal(byReach.json().peakLagSteps, 3);
 });
 
 test('同时执行的作业结果不串号', async () => {
