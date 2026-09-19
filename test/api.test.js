@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildApp } from '../src/app.js';
 import { DEMO_JOB_ID } from '../src/config.js';
-import { TRIANGULAR_INFLOW, SHORT_TRIANGLE } from './helpers.js';
+import { TRIANGULAR_INFLOW, SHORT_TRIANGLE, PLATEAU_INFLOW } from './helpers.js';
 
 let app;
 
@@ -45,6 +45,33 @@ test('取不存在的作业：404 NOT_FOUND', async () => {
   const res = await app.inject({ method: 'GET', url: '/jobs/no-such-id' });
   assert.equal(res.statusCode, 404);
   assert.equal(res.json().error.type, 'NOT_FOUND');
+});
+
+test('峰顶走平：提交与取回的入流峰现都取平台起点，点名河段档也一样', async () => {
+  const created = await app.inject({
+    method: 'POST',
+    url: '/reaches',
+    payload: { name: '平台对照段', K: 2, X: 0.2 },
+  });
+  assert.equal(created.statusCode, 201);
+
+  for (const payload of [
+    { inflow: PLATEAU_INFLOW, dt: 1, K: 2, X: 0.2 },
+    { inflow: PLATEAU_INFLOW, dt: 1, reachName: '平台对照段' },
+  ]) {
+    const res = await postJob(payload);
+    assert.equal(res.statusCode, 201);
+    const job = res.json();
+    assert.equal(job.inflowPeakIndex, 3, '入流峰现必须取平台起点下标 3，而非平台末尾');
+    assert.equal(job.outflowPeakIndex, 6, '出流是尖峰，峰现下标 6');
+    assert.equal(job.peakLagSteps, 3, '滞后步数必须按平台起点算：6 − 3 = 3');
+
+    const got = await app.inject({ method: 'GET', url: `/jobs/${job.id}` });
+    assert.equal(got.statusCode, 200);
+    assert.equal(got.json().inflowPeakIndex, 3, '用编号取回的结果峰现下标也应是平台起点');
+    assert.equal(got.json().peakLagSteps, 3);
+    assert.deepEqual(got.json().outflow, job.outflow, '出流过程线落盘前后一致');
+  }
 });
 
 test('X 越界被拒（>0.5 与 <0 都退回，并指出是 X）', async () => {

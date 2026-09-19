@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { AppError } from './errors.js';
 import { computeCoefficients } from './muskingum/coefficients.js';
 import { routeHydrograph } from './muskingum/routing.js';
-import { volume } from './muskingum/hydrograph.js';
+import { firstPeakIndex, volume } from './muskingum/hydrograph.js';
 import { validateJobPayload } from './validation.js';
 import { COEFFICIENT_SUM_TOLERANCE, VOLUME_CLOSURE_RELATIVE_TOLERANCE } from './config.js';
 
@@ -19,8 +19,9 @@ export function executeRouting({ id, inflow, dt, K, X, reachName = null, initial
   const startOutflow = initialOutflow ?? inflow[0];
   const outflow = routeHydrograph(inflow, coeffs, startOutflow);
 
-  const inflowPeakIndex = inflow.reduce((best, v, i) => (v >= inflow[best] ? i : best), 0);
-  const outflowPeakIndex = outflow.reduce((best, v, i) => (v >= outflow[best] ? i : best), 0);
+  // 峰顶走平时取最先达到最大值的下标（平台起点），滞后步数也按这个下标算
+  const inflowPeakIndex = firstPeakIndex(inflow);
+  const outflowPeakIndex = firstPeakIndex(outflow);
   const inflowVolume = volume(inflow, dt);
   const outflowVolume = volume(outflow, dt);
   const closureTolerance = VOLUME_CLOSURE_RELATIVE_TOLERANCE * Math.max(1, Math.abs(inflowVolume));

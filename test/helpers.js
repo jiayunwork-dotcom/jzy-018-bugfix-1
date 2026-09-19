@@ -8,3 +8,6 @@ export const TRIANGULAR_INFLOW = [
 
 /** 短三角（失稳案例用，无需长尾） */
 export const SHORT_TRIANGLE = [0, 10, 20, 30, 20, 10, 0];
+
+/** 峰顶走平的入流：最大值 30 从下标 3 连续到下标 5，峰现约定取下标 3 */
+export const PLATEAU_INFLOW = [0, 10, 20, 30, 30, 30, 20, 10, 0];
